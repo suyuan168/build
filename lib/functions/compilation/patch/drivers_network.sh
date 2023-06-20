@@ -172,7 +172,19 @@ driver_rtl8811_rtl8812_rtl8814_rtl8821() {
 
 		fetch_from_repo "$GITHUB_SOURCE/aircrack-ng/rtl8812au" "rtl8812au" "${rtl8812auver}" "yes"
 		cd "$kerneldir" || exit
-		rm -rf "$kerneldir/drivers/net/wireless/rtl8812au"
+
+		# Brief detour. Turns out that HardKernel's vendor odroidxu4 kernel already has this driver
+		# "slipstreamed" into it, complete with a bunch of PDF files and other junk.
+		# See https://github.com/hardkernel/linux/tree/odroid-5.4.y/drivers/net/wireless/rtl8812au
+		# If we remove them here, the resulting patch will contain binary diffs which are unsupported by patch(1).
+		# So if building for the odroidxu4/current, we'll leave the original files in place, and just overwrite
+		# the possibly-updated source files (not PDFs and such). Thanks, HardKernel.
+		if [[ "${LINUXFAMILY}/${BRANCH}" == "odroidxu4/current" ]]; then
+			display_alert "Skipping" "Removing rtl8812au files from odroidxu4 kernel" "info"
+		else
+			rm -rf "$kerneldir/drivers/net/wireless/rtl8812au"
+		fi
+
 		mkdir -p "$kerneldir/drivers/net/wireless/rtl8812au/"
 		cp -R "${SRC}/cache/sources/rtl8812au/${rtl8812auver#*:}"/{core,hal,include,os_dep,platform} \
 			"$kerneldir/drivers/net/wireless/rtl8812au"
@@ -388,11 +400,29 @@ driver_rtl88x2bu() {
 }
 
 driver_rtw88() {
+	if [[ "$LINUXFAMILY" == d1 || "$BRANCH" == midstream ]]; then
+		# "D1" is using an old 6.1 which can't take this.
+		# "midstream" a half monster kernel, a cross between sre mainline and downstream rk kernel
+		return 0
+	fi
+
 	# Upstream wireless RTW88 drivers
 	if [[ "$version" == "6.1" || "$version" == "6.2" || "$version" == "6.3" ]] && [ $EXTRAWIFI == yes ]; then
 		display_alert "Adding" "Upstream wireless RTW88 drivers" "info"
 		process_patch_file "${SRC}/patch/misc/rtw88/${version}/001-rtw88-linux-next.patch" "applying"
 		process_patch_file "${SRC}/patch/misc/rtw88/${version}/002-rtw88-linux-next.patch" "applying"
+		process_patch_file "${SRC}/patch/misc/rtw88/${version}/003-rtw88-add-missing-unwind-goto-for_rtw_download_firmware.patch" "applying"
+		process_patch_file "${SRC}/patch/misc/rtw88/${version}/004-rtw88-fix-action-frame-transmission-fail-before-association.patch" "applying"
+		process_patch_file "${SRC}/patch/misc/rtw88/hack/001-revert-rtw88-sdio-size-and-timout-to-rfc-v1.patch" "applying"
+		process_patch_file "${SRC}/patch/misc/rtw88/hack/002-rtw88-usb-make-work-queues-high-priority.patch" "applying"
+	fi
+	if [[ "$version" == "6.4" ]] && [ $EXTRAWIFI == yes ]; then
+		display_alert "Adding" "Upstream wireless RTW88 drivers" "info"
+		process_patch_file "${SRC}/patch/misc/rtw88/${version}/001-rtw88-add-support-for-the-RTL8723DS-SDIO-wifi-chip.patch" "applying"
+		process_patch_file "${SRC}/patch/misc/rtw88/${version}/002-rtw88-add-missing-unwind-goto-for_rtw_download_firmware.patch" "applying"
+		process_patch_file "${SRC}/patch/misc/rtw88/${version}/003-rtw88-fix-action-frame-transmission-fail-before-association.patch" "applying"
+		process_patch_file "${SRC}/patch/misc/rtw88/hack/001-revert-rtw88-sdio-size-and-timout-to-rfc-v1.patch" "applying"
+		process_patch_file "${SRC}/patch/misc/rtw88/hack/002-rtw88-usb-make-work-queues-high-priority.patch" "applying"
 	fi
 }
 
@@ -584,7 +614,7 @@ driver_rtl8822BS() {
 
 driver_uwe5622_allwinner() {
 	# Unisoc uwe5622 wireless Support
-	if linux-version compare "${version}" ge 4.4 && linux-version compare "${version}" le 6.3 && [[ "$LINUXFAMILY" == sunxi* || "$LINUXFAMILY" == rockchip64 ]]; then
+	if linux-version compare "${version}" ge 6.0 && linux-version compare "${version}" le 6.3 && [[ "$LINUXFAMILY" == sunxi* || "$LINUXFAMILY" == rockchip64 ]]; then
 		display_alert "Adding" "Drivers for Unisoc uwe5622 found on some Allwinner and Rockchip boards" "info"
 
 		if linux-version compare "${version}" ge 6.3; then
@@ -671,29 +701,4 @@ driver_rtl8723cs() {
 		process_patch_file "${SRC}/patch/misc/wireless-rtl8723cs/8723cs-Port-to-6.3.patch" "applying"
 	fi
 
-}
-
-patch_drivers_network() {
-	display_alert "Patching network related drivers"
-
-	driver_generic_bring_back_ipx
-	driver_rtl8152_rtl8153
-	driver_rtl8189ES
-	driver_rtl8189FS
-	driver_rtl8192EU
-	driver_rtl8811_rtl8812_rtl8814_rtl8821
-	driver_xradio_xr819
-	driver_rtl8811CU_rtl8821C
-	driver_rtl8188EU_rtl8188ETV
-	driver_rtl88x2bu
-	driver_rtw88
-	driver_rtl88x2cs
-	driver_rtl8822cs_bt
-	driver_rtl8723DS
-	driver_rtl8723DU
-	driver_rtl8822BS
-	driver_uwe5622_allwinner
-	driver_rtl8723cs
-
-	display_alert "Network related drivers patched" "" "info"
 }
