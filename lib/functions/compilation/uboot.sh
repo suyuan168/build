@@ -55,6 +55,12 @@ function compile_uboot_target() {
 		# atftempdir is under WORKDIR, so no cleanup necessary.
 	fi
 
+	# crusttempdir comes from crust.sh's compile_crust()
+	if [[ -n $CRUSTSOURCE && -d "${crusttempdir}" ]]; then
+		display_alert "Copying over bin/elf's from crusttempdir" "${crusttempdir}" "debug"
+		run_host_command_logged cp -pv "${crusttempdir}"/*.bin "${crusttempdir}"/*.elf ./ # only works due to nullglob
+	fi
+
 	# Hook time, for extra post-processing
 	call_extension_method "pre_config_uboot_target" <<- 'PRE_CONFIG_UBOOT_TARGET'
 		*allow extensions prepare before configuring and compiling an u-boot target*
@@ -62,7 +68,7 @@ function compile_uboot_target() {
 		For example, changing Python version can be done by replacing the `${BIN_WORK_DIR}/python` symlink.
 	PRE_CONFIG_UBOOT_TARGET
 
-	display_alert "${uboot_prefix}Preparing u-boot config" "${version} ${target_make}" "info"
+	display_alert "${uboot_prefix}Preparing u-boot config '${BOOTCONFIG}'" "${version} ${target_make}" "info"
 	declare -g if_error_detail_message="${uboot_prefix}Failed to configure u-boot ${version} $BOOTCONFIG ${target_make}"
 	run_host_command_logged CCACHE_BASEDIR="$(pwd)" PATH="${toolchain}:${toolchain2}:${PATH}" \
 		"KCFLAGS=-fdiagnostics-color=always" \
